@@ -68,221 +68,172 @@ Fixpoint clean (cs: string) (acc: string): string :=
       res
   end.
 
+Notation "cst ::: s" :=
+  ltac:(match cst with
+        | context c[EmptyString] => let c' := context c[s] in exact c'
+        | _ => fail "Left string is not constant"
+        end) (at level 60, only parsing).
+
 Definition inst2str_const (r: reg) (imm: word64) (str: string): string :=
-  let/d prefix := "movq $" in
   let/d imm_n := Z.to_N (word.unsigned imm) in
-  let/d comma_str := ", " in
   let/d reg_str := reg2str1 r str in
-  let/d comma_reg := comma_str ++ reg_str in
+  let/d comma_reg := ", " ::: reg_str in
   let/d imm_str := N2str imm_n comma_reg in
-  let/d res := prefix ++ imm_str in
+  let/d res := "movq $" ::: imm_str in
   res.
 
 Definition inst2str_mov (dst: reg) (src: reg) (str: string): string :=
-  let/d prefix := "movq " in
-  let/d comma_str := ", " in
   let/d dst_str := reg2str1 dst str in
-  let/d comma_dst := comma_str ++ dst_str in
+  let/d comma_dst := ", " ::: dst_str in
   let/d src_comma_dst := reg2str1 src  comma_dst in
-  let/d res := prefix ++ src_comma_dst in
+  let/d res := "movq " ::: src_comma_dst in
   res.
 
 Definition inst2str_add (dst: reg) (src: reg) (str: string): string :=
-  let/d prefix := "addq " in
-  let/d comma_str := ", " in
   let/d dst_str := reg2str1 dst str in
-  let/d comma_dst := comma_str ++ dst_str in
+  let/d comma_dst := ", " ::: dst_str in
   let/d src_comma_dst := reg2str1 src comma_dst in
-  let/d res := prefix ++ src_comma_dst in
+  let/d res := "addq " ::: src_comma_dst in
   res.
 
 Definition inst2str_sub (dst: reg) (src: reg) (str: string): string :=
-  let/d prefix := "subq " in
-  let/d comma_str := ", " in
   let/d dst_str := reg2str1 dst str in
-  let/d comma_dst := comma_str ++ dst_str in
+  let/d comma_dst := ", " ::: dst_str in
   let/d src_comma_dst := reg2str1 src comma_dst in
-  let/d res := prefix ++ src_comma_dst in
+  let/d res := "subq " ::: src_comma_dst in
   res.
 
 Definition inst2str_div (r: reg) (str: string): string :=
-  let/d prefix := "divq " in
   let/d r_str := reg2str1 r str in
-  let/d res := prefix ++ r_str in
+  let/d res := "divq " ::: r_str in
   res.
 
 Definition inst2str_jump_always (n: nat) (str: string): string :=
-  let/d prefix := "jmp " in
   let/d lab_str := lab n str in
-  let/d res := prefix ++ lab_str in
+  let/d res := "jmp " ::: lab_str in
   res.
 
 Definition inst2str_jump_equal (r1: reg) (r2: reg) (n: nat) (str: string): string :=
   let/d cmpq_prefix := "cmpq " in
-  let/d comma_str := ", " in
   let/d je_prefix := " ; je " in
   let/d lab_str := lab n str in
   let/d je_lab := je_prefix ++ lab_str in
   let/d r1_str := reg2str1 r1 je_lab in
-  let/d comma_r1 := comma_str ++ r1_str in
+  let/d comma_r1 := ", " ::: r1_str in
   let/d r2_comma_r1 := reg2str1 r2 comma_r1 in
   let/d res := cmpq_prefix ++ r2_comma_r1 in
   res.
 
 Definition inst2str_jump_less (r1: reg) (r2: reg) (n: nat) (str: string): string :=
   let/d cmpq_prefix := "cmpq " in
-  let/d comma_str := ", " in
   let/d jb_prefix := " ; jb " in
   let/d lab_str := lab n str in
   let/d jb_lab := jb_prefix ++ lab_str in
   let/d r1_str := reg2str1 r1 jb_lab in
-  let/d comma_r1 := comma_str ++ r1_str in
+  let/d comma_r1 := ", " ::: r1_str in
   let/d r2_comma_r1 := reg2str1 r2 comma_r1 in
   let/d res := cmpq_prefix ++ r2_comma_r1 in
   res.
 
 Definition inst2str_call (n: nat) (str: string): string :=
-  let/d prefix := "call " in
   let/d lab_str := lab n str in
-  let/d res := prefix ++ lab_str in
+  let/d res := "call " ::: lab_str in
   res.
 
 Definition inst2str_ret (str: string): string :=
-  let/d prefix := "ret" in
-  let/d res := prefix ++ str in
+  let/d res := "ret" ::: str in
   res.
 
 Definition inst2str_pop (r: reg) (str: string): string :=
-  let/d prefix := "popq " in
   let/d r_str := reg2str1 r str in
-  let/d res := prefix ++ r_str in
+  let/d res := "popq " ::: r_str in
   res.
 
 Definition inst2str_push (r: reg) (str: string): string :=
-  let/d prefix := "pushq " in
   let/d r_str := reg2str1 r str in
-  let/d res := prefix ++ r_str in
+  let/d res := "pushq " ::: r_str in
   res.
 
 Definition inst2str_load_rsp (r: reg) (n: nat) (str: string): string :=
-  let/d prefix := "movq " in
   let/d mult_const := 8 in
   let/d offset := mult_const * n in
   let/d rsp_prefix := "(%rsp), " in
   let/d r_str := reg2str1 r str in
   let/d rsp_r := rsp_prefix ++ r_str in
   let/d offset_str := num2str offset rsp_r in
-  let/d res := prefix ++ offset_str in
+  let/d res := "movq " ::: offset_str in
   res.
 
 Definition inst2str_store_rsp (r: reg) (n: nat) (str: string): string :=
-  let/d prefix := "movq " in
-  let/d comma_str := ", " in
   let/d mult_const := 8 in
   let/d offset := mult_const * n in
   let/d rsp_suffix := "(%rsp), " in
   let/d rsp_suffix_str := rsp_suffix ++ str in
   let/d offset_str := num2str offset rsp_suffix_str in
-  let/d comma_offset := comma_str ++ offset_str in
+  let/d comma_offset := ", " ::: offset_str in
   let/d r_str := reg2str1 r comma_offset in
-  let/d res := prefix ++ r_str in
+  let/d res := "movq " ::: r_str in
   res.
 
 Definition inst2str_add_rsp (n: nat) (str: string): string :=
-  let/d prefix := "addq $" in
   let/d mult_const := 8 in
   let/d offset := mult_const * n in
   let/d rsp_suffix := ", %rsp" in
   let/d rsp_suffix_str := rsp_suffix ++ str in
   let/d offset_str := num2str offset rsp_suffix_str in
-  let/d res := prefix ++ offset_str in
+  let/d res := "addq $" ::: offset_str in
   res.
 
 Definition inst2str_sub_rsp (n: nat) (str: string): string :=
-  let/d prefix := "subq $" in
   let/d mult_const := 8 in
   let/d offset := mult_const * n in
   let/d rsp_suffix := ", %rsp" in
   let/d rsp_suffix_str := rsp_suffix ++ str in
   let/d offset_str := num2str offset rsp_suffix_str in
-  let/d res := prefix ++ offset_str in
+  let/d res := "subq $" ::: offset_str in
   res.
 
 Definition inst2str_store (src: reg) (a: reg) (w: word4) (str: string): string :=
-  let/d prefix := "movq " in
-  let/d comma_str := ", " in
   let/d w_n := Z.to_N (word.unsigned w) in
-  let/d paren_open := "(" in
-  let/d paren_close := ")" in
-  let/d paren_close_str := paren_close ++ str in
+  let/d paren_close_str := ")" ::: str in
   let/d a_str := reg2str1 a paren_close_str in
-  let/d paren_a := paren_open ++ a_str in
+  let/d paren_a := "(" ::: a_str in
   let/d w_str := N2str w_n paren_a in
-  let/d comma_w := comma_str ++ w_str in
+  let/d comma_w := ", " ::: w_str in
   let/d src_comma_w := reg2str1 src comma_w in
-  let/d res := prefix ++ src_comma_w in
+  let/d res := "movq " ::: src_comma_w in
   res.
 
 Definition inst2str_load (dst: reg) (a: reg) (w: word4) (str: string): string :=
-  let/d prefix := "movq " in
   let/d w_n := Z.to_N (word.unsigned w) in
-  let/d paren_open := "(" in
-  let/d paren_close := "), " in
   let/d dst_str := reg2str1 dst str in
-  let/d paren_close_dst := paren_close ++ dst_str in
+  let/d paren_close_dst := "), " ::: dst_str in
   let/d a_str := reg2str1 a paren_close_dst in
-  let/d paren_a := paren_open ++ a_str in
+  let/d paren_a := "(" ::: a_str in
   let/d w_str := N2str w_n paren_a in
-  let/d res := prefix ++ w_str in
+  let/d res := "movq " ::: w_str in
   res.
 
 Definition inst2str_getchar1 (str: string): string :=
-  let/d movq_part := "movq st" in
-  let/d din_part := "din(%ri" in
-  let/d p_part := "p), %rd" in
-  let/d i_part := "i ; cal" in
-  let/d l_part := "l _IO_g" in
-  let/d etc_part := "etc@PLT" in
-  let/d temp1 := movq_part ++ din_part in
-  let/d temp2 := temp1 ++ p_part in
-  let/d temp3 := temp2 ++ i_part in
-  let/d temp4 := temp3 ++ l_part in
-  let/d prefix := temp4 ++ etc_part in
-  let/d res := prefix ++ str in
+  let/d res := "movq stdin(%rip), %rdi ; call _IO_getc@PLT" ::: str in
   res.
 
 Definition inst2str_putchar (str: string): string :=
-  let/d movq_part := "movq st" in
-  let/d dout_part := "dout(%r" in
-  let/d ip_part := "ip), %r" in
-  let/d si_part := "si ; ca" in
-  let/d ll_part := "ll _IO_" in
-  let/d putc_part := "putc@PL" in
-  let/d t_part := "T" in
-  let/d temp1 := movq_part ++ dout_part in
-  let/d temp2 := temp1 ++ ip_part in
-  let/d temp3 := temp2 ++ si_part in
-  let/d temp4 := temp3 ++ ll_part in
-  let/d temp5 := temp4 ++ putc_part in
-  let/d prefix := temp5 ++ t_part in
-  let/d res := prefix ++ str in
+  let/d res := "movq stdout(%rip), %rsi ; call _IO_putc@PLT" ::: str in
   res.
 
+(* TODO: Auto ++ to ::: *)
+
 Definition inst2str_exit (str: string): string :=
-  let/d call_part := "call ex" in
-  let/d it_part := "it@PLT" in
-  let/d prefix := call_part ++ it_part in
-  let/d res := prefix ++ str in
+  let/d res := "call exit@PLT" ::: str in
   res.
 
 Definition inst2str_comment (c: string) (str: string): string :=
-  let/d newline := "
-  
-  	/* " in
-  let/d suffix := " */" in
-  let/d suffix_str := suffix ++ str in
+  let/d suffix_str := " */" ::: str in
   let/d clean_c := clean c suffix_str in
-  let/d res := newline ++ clean_c in
+  let/d res := "
+  
+  	/* " ::: clean_c in
   res.
 
 Definition inst2str (i: instr) (str: string): string :=
@@ -390,132 +341,61 @@ Fixpoint concat_strings (ss: list string): string :=
   end.
 
 Definition asm2str_header1: list string :=
-  let/d dot_bss := "	.bss
+  let/d bss_str := "	.bss
   " in
-  let/d bss_str := dot_bss in
-  let/d dot_p2a := "	.p2alig" in
-  let/d n3_spc := "n 3    " in
-  let/d comment1 := "      " in
-  let/d comment2 := "  /* 8-" in
-  let/d comment3 := "byte al" in
-  let/d comment4 := "ign    " in
-  let/d comment5 := "    */
+  let/d p2align1_str := "	.p2align 3            /* 8-byte align        */
   " in
-  let/d p2align_temp2 := dot_p2a ++ n3_spc in
-  let/d p2align_temp3 := p2align_temp2 ++ comment1 in
-  let/d p2align_temp4 := p2align_temp3 ++ comment2 in
-  let/d p2align_temp5 := p2align_temp4 ++ comment3 in
-  let/d p2align_temp6 := p2align_temp5 ++ comment4 in
-  let/d p2align_temp7 := p2align_temp6 ++ comment5 in
-  let/d p2align1_str := p2align_temp7 in
   let/d heaps_lbl := "heapS:
   " in
-  let/d space_cmd := "	.space " in
-  let/d size_str := "8*1024*" in
-  let/d size_str2 := "1024  /" in
-  let/d comment6 := "* bytes" in
-  let/d comment7 := " of hea" in
-  let/d comment8 := "p space" in
-  let/d comment9 := " */
+  let/d space_str := "	.space 8*1024*1024  /* bytes of heap space */
   " in
-  let/d space_temp2 := space_cmd ++ size_str in
-  let/d space_temp3 := space_temp2 ++ size_str2 in
-  let/d space_temp4 := space_temp3 ++ comment6 in
-  let/d space_temp5 := space_temp4 ++ comment7 in
-  let/d space_temp6 := space_temp5 ++ comment8 in
-  let/d space_temp7 := space_temp6 ++ comment9 in
-  let/d space_str := space_temp7 in
   let/d list1 := [bss_str; p2align1_str; heaps_lbl; space_str] in
   list1.
 
 Definition asm2str_header2: list string :=
-  let/d dot_p2a := "	.p2alig" in
-  let/d n3_spc := "n 3    " in
-  let/d comment1 := "      " in
-  let/d comment2 := "  /* 8-" in
-  let/d comment3 := "byte al" in
-  let/d comment4 := "ign    " in
-  let/d comment5 := "    */
+  let/d p2align2 := "	.p2align 3            /* 8-byte align        */
   " in
-  let/d p2align2_temp2 := dot_p2a ++ n3_spc in
-  let/d p2align2_temp3 := p2align2_temp2 ++ comment1 in
-  let/d p2align2_temp4 := p2align2_temp3 ++ comment2 in
-  let/d p2align2_temp5 := p2align2_temp4 ++ comment3 in
-  let/d p2align2_temp6 := p2align2_temp5 ++ comment4 in
-  let/d p2align2_temp7 := p2align2_temp6 ++ comment5 in
-  let/d p2align2_str := p2align2_temp7 in
-  let/d heape_lbl := "heapE:" in
-  let/d double_nl := "
+  let/d heapE := "heapE:
     
-    " in
-  let/d heapE_str := heape_lbl ++ double_nl in
+  " in
   let/d dot_text := "	.text
   " in
-  let/d dot_globl := "	.globl " in
-  let/d main_lbl := "main
+  let/d globl := "	.globl main
   " in
-  let/d globl_str := dot_globl ++ main_lbl in
-  let/d list2 := [p2align2_str; heapE_str; dot_text; globl_str] in
+  let/d list2 := [p2align2; heapE; dot_text; globl] in
   list2.
 
 Definition asm2str_header3: list string :=
-  let/d main_colon := "main:
+let/d main_colon := "main:
   " in
-  let/d subq_cmd := "	subq $8" in
-  let/d rsp_part := ", %rsp " in
-  let/d align_cmt1 := "       " in
-  let/d align_cmt2 := "/* 16-b" in
-  let/d align_cmt3 := "yte ali" in
-  let/d align_cmt4 := "gn %rsp" in
-  let/d align_cmt5 := " */
+  let/d subq_str := "	subq $8, %rsp        /* 16-byte align %rsp */
   " in
-  let/d subq_temp2 := subq_cmd ++ rsp_part in
-  let/d subq_temp3 := subq_temp2 ++ align_cmt1 in
-  let/d subq_temp4 := subq_temp3 ++ align_cmt2 in
-  let/d subq_temp5 := subq_temp4 ++ align_cmt3 in
-  let/d subq_temp6 := subq_temp5 ++ align_cmt4 in
-  let/d subq_temp7 := subq_temp6 ++ align_cmt5 in
-  let/d subq_str := subq_temp7 in
-  let/d movabs1_cmd := "	movabs " in
-  let/d heaps_ref := "$heapS," in
-  let/d r14_reg := " %r14  " in
-  let/d heap_cmt1 := "/* r14 " in
-  let/d heap_cmt2 := ":= heap" in
-  let/d heap_cmt3 := " start " in
-  let/d heap_cmt4 := " */
+  let/d movabs1_str := "	movabs $heapS, %r14  /* r14 := heap start  */
   " in
-  let/d movabs1_temp2 := movabs1_cmd ++ heaps_ref in
-  let/d movabs1_temp3 := movabs1_temp2 ++ r14_reg in
-  let/d movabs1_temp4 := movabs1_temp3 ++ heap_cmt1 in
-  let/d movabs1_temp5 := movabs1_temp4 ++ heap_cmt2 in
-  let/d movabs1_temp6 := movabs1_temp5 ++ heap_cmt3 in
-  let/d movabs1_temp7 := movabs1_temp6 ++ heap_cmt4 in
-  let/d movabs1_str := movabs1_temp7 in
-  let/d heape_ref := "$heapE," in
-  let/d r15_reg := " %r15  " in
-  let/d heap_cmt5 := ":= heap" in
-  let/d heap_cmt6 := " end   " in
-  let/d final_nl := "
+  let/d movabs2_str := "	movabs $heapE, %r15  /* r14 := heap end    */
+  
     
     " in
-  let/d movabs2_temp2 := movabs1_cmd ++ heape_ref in
-  let/d movabs2_temp3 := movabs2_temp2 ++ r15_reg in
-  let/d movabs2_temp4 := movabs2_temp3 ++ heap_cmt1 in
-  let/d movabs2_temp5 := movabs2_temp4 ++ heap_cmt5 in
-  let/d movabs2_temp6 := movabs2_temp5 ++ heap_cmt6 in
-  let/d movabs2_temp7 := movabs2_temp6 ++ heap_cmt4 in
-  let/d movabs2_str := movabs2_temp7 ++ final_nl in
   let/d list3 := [main_colon; subq_str; movabs1_str; movabs2_str] in
   list3.
 
-Definition asm2str (is: asm): string := 
-  let/d list1 := asm2str_header1 in
-  let/d list2 := asm2str_header2 in
-  let/d list3 := asm2str_header3 in
-  let/d list12 := list_append list1 list2 in
-  let/d header_list := list_append list12 list3 in
-  let/d header_str := concat_strings header_list in
+Definition asm2str (is: asm): string :=
   let/d zero_val := 0 in
   let/d instrs_str := instrs2str zero_val is in
-  let/d res := header_str ++ instrs_str in
+  let/d res := "	.bss
+  	.p2align 3            /* 8-byte align        */
+  heapS:
+  	.space 8*1024*1024  /* bytes of heap space */
+  	.p2align 3            /* 8-byte align        */
+  heapE:
+    
+  	.text
+  	.globl main
+  main:
+  	subq $8, %rsp        /* 16-byte align %rsp */
+  	movabs $heapS, %r14  /* r14 := heap start  */
+  	movabs $heapE, %r15  /* r14 := heap end    */
+  
+    
+    " ::: instrs_str in
   res.
