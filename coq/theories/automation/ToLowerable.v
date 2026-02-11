@@ -47,12 +47,12 @@ Ltac2 rewrite_lowerable () :=
     rewrite <- list_append_spec
   | [ |- context [ List.length _ ] ] =>
     rewrite <- list_length_spec
-  | [ |- context [
-    let/d x := (String _ (String _ (String _ (String _ (String _ _))))) in _ ] ] =>
-    rewrite split_string
-  | [ |- context [
-    let/d x := (_ :: _ :: _ :: _ :: _ :: _) in _ ] ] =>
-    rewrite split_list
+  | [ |- context c [dlet (String ?a0 (String ?a1 (String ?a2 (String ?a3 (String ?a ?s))))) ?k] ] =>
+    let inst := Pattern.instantiate c constr:(dlet (String $a $s) (fun str_tl => dlet (String $a0 (String $a1 (String $a2 (String $a3 str_tl)))) $k)) in
+    change $inst
+  | [ |- context c [dlet (?x0 :: ?x1 :: ?x2 :: ?x3 :: ?x :: ?xs) ?k] ] =>
+    let inst := Pattern.instantiate c constr:(dlet ($x :: $xs) (fun xs_tl => dlet ($x0 :: $x1 :: $x2 :: $x3 :: xs_tl) $k)) in
+    change $inst
   end).
 
 (* test *)
@@ -77,8 +77,9 @@ Goal forall (a b: N), test2 a b = test2 a b.
 Qed.
 
 Definition test_split_string (s1 s2: string): string :=
-  let/d s := "abcdefg"%string in
-  append s s2.
+  let/d s := "abcde"%string in
+  let/d ss := "efghi"%string in
+  append s ss.
 
 Goal forall (s1 s2: string), test_split_string s1 s2 = test_split_string s1 s2.
   intros; unfold test_split_string.
