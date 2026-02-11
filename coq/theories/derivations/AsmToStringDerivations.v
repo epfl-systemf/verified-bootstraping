@@ -241,6 +241,195 @@ Proof.
   time relcompile.
 Qed.
 
+(* Definition compile_string (str: list ascii) := *)
+(*   List.fold_right (fun hd acc => FunSyntax.Op FunSyntax.Cons [FunSyntax.Const (N_of_ascii hd); acc]) *)
+(*                   (FunSyntax.Const 0) str. *)
+
+Fixpoint reify_string (str: list ascii) (onto: FunSyntax.exp) :=
+  match str with
+  | [] => onto
+  | a :: str => FunSyntax.Op FunSyntax.Cons
+                [FunSyntax.Const (N_of_ascii a); reify_string str onto]
+  end.
+
+Eval cbv -[N_of_ascii] in reify_string (list_ascii_of_string "movql") (FunSyntax.Const 0).
+
+Lemma reify_string_ok (l r : list ascii) (rexp: FunSyntax.exp):
+  ∀ (env : FEnv.env) (s : state),
+    env |-- ([rexp], s) ---> ([encode r], s) ->
+    env |-- ([reify_string l rexp], s) ---> ([encode (l ++ r)%list], s).
+Proof.
+  induction l; simpl; repeat econstructor; eauto.
+Qed.
+
+From coqutil Require Import Datatypes.List.
+
+Definition ne name n := name_enc (name ++ (N2str n "")).
+
+Fixpoint reify_string_chunks (name: string) (n: N) (chunks: list (list ascii))
+  (onto: FunSyntax.exp -> FunSyntax.exp) :=
+  match chunks with
+  | [] => onto (FunSyntax.Const 0)
+  (* | [s] => reify_string s LATER: Save time when there's just one chunk *)
+  | s :: chunks =>
+      reify_string_chunks
+        name (n + 1) chunks
+        (fun v =>
+           let name' := ne name n in
+           FunSyntax.Let
+             name'
+             (reify_string s v)
+             (onto (FunSyntax.Var name')))
+  end.
+
+Definition reify_chunked_k (name: string) (sz: nat) (str: list ascii)
+  (onto: FunSyntax.exp -> FunSyntax.exp) :=
+  reify_string_chunks name 0 (chunk sz str) onto.
+
+Eval cbv -[N_of_ascii name_enc] in reify_chunked_k "f" 4 (list_ascii_of_string "fooxbarxbazxquuux").
+
+Definition envn (name: string) (chunks: list (list ascii)) (n: N) (env: FEnv.env) :=
+  FEnv.insert_all
+    (map (fun k => (name_enc (name ++ (N2str (N.of_nat k + n) "")),
+                  Some (encode (List.concat (skipn k chunks)))))
+       (seq 0 (List.length chunks)))
+    env.
+
+Lemma envn_step (name: string) s (chunks: list (list ascii)) (n: N) (env: FEnv.env) :
+  envn name (s :: chunks) n env =
+    FEnv.insert (ne name n, Some (encode (s ++ List.concat chunks)%list))
+      (envn name chunks (n + 1) env).
+Proof.
+  unfold envn; simpl; do 2 f_equal.
+  rewrite <- seq_shift, map_map.
+  apply map_ext; intros. do 4 f_equal.
+  ltac1:(lia).
+Qed.
+
+Lemma reify_string_chunks_ok (name: string) (chunks: list (list ascii)) :
+  let str := List.concat chunks in
+  forall (n: N) (onto: FunSyntax.exp -> FunSyntax.exp) (v: Value),
+  ∀ (env : FEnv.env) (s : state),
+    (forall e,
+        let env' := envn name chunks n env in
+        env' |-- ([e], s) ---> ([encode str], s) ->
+        env' |-- ([onto e], s) ---> ([v], s)) ->
+    env |-- ([reify_string_chunks name n chunks onto], s) ---> ([v], s).
+Proof.
+  induction chunks; intros str; simpl.
+  - eauto using eval.
+  - intros * Honto.
+    eapply IHchunks; intros * H.
+    econstructor.
+    + apply reify_string_ok; eauto.
+    + rewrite !envn_step in Honto.
+      eapply Honto.
+      eauto using eval, FEnv.lookup_insert_eq.
+Qed.
+
+Definition reify_chunked (name: string) (sz: nat) (str: list ascii) (k: FunSyntax.exp) :=
+  reify_chunked_k name sz str
+    (fun e => FunSyntax.Let (name_enc name) e k).
+
+Lemma reify_chunked_ok (name: string) (sz: nat) (str: list ascii) (k: FunSyntax.exp) :
+  ∀ (env : FEnv.env) (s : state) (v: Value),
+    FEnv.insert (name_enc name, Some (encode str)) (envn name (chunk sz str) 0 env)
+      |-- ([k], s) ---> ([v], s) ->
+    env |-- ([reify_chunked name sz str k], s) ---> ([v], s).
+Proof.
+  intros; apply reify_string_chunks_ok; simpl; intros.
+  rewrite concat_chunk in *.
+  eauto using eval.
+Qed.
+
+Import FunProperties.
+
+Lemma env_insert_equiv n0 x v env0 env1 :
+  (forall n, In n (free_vars x) ->
+        env0 n = env1 n) ->
+  (forall n, In n (free_vars x) ->
+        FEnv.insert n0 v (env0 n) = FEnv.insert n0 v (env1 n)).
+Proof.
+  intros * Henv.
+  intros.
+  unfold FEnv.insert.
+  rewrite Henv; eauto.
+Qed.
+
+Theorem eval_env_ext x env0 env1 res s s1 :
+    (forall n, In n (free_vars x) -> env0 n = env1 n) ->
+    env0 |-- ([x], s) ---> (res, s1) <-> env1 |-- ([x], s) ---> (res, s1).
+Proof.
+Admitted.
+
+(* TODO generate numbers instead of names? *)
+Lemma reify_chunked_ok' (name: string) (sz: nat) (str: list ascii) (k: FunSyntax.exp) :
+  ∀ (env : FEnv.env) (s : state) (v: Value),
+    (* negb (existsb (fun fv => prefix name fv) (FunProperties.free_vars k)) = true -> *)
+    (forall n, In n (free_vars k) -> envn name (chunk sz str) 0 FEnv.empty n = None) ->
+    FEnv.insert (name_enc name, Some (encode str)) env |-- ([k], s) ---> ([v], s) ->
+    env |-- ([reify_chunked name sz str k], s) ---> ([v], s).
+Proof.
+  intros * Henv Hk; apply reify_string_chunks_ok; simpl.
+  rewrite concat_chunk in *.
+  econstructor; eauto.
+  eapply eval_env_ext.
+  2: eapply Hk.
+  intros.
+  apply env_insert_equiv.
+
+  f_equal.
+Qed.
+
+Lemma reify_string_chunks_ok (name: string) (chunks: list (list ascii)) :
+  let str := List.concat chunks in
+  forall (n: N) (onto: FunSyntax.exp -> FunSyntax.exp) (k: Value),
+  ∀ (env : FEnv.env) (s : state),
+    (forall env' e,
+        env' |-- ([e], s) ---> ([encode str], s) ->
+        env' |-- ([onto e], s) ---> ([k], s)) ->
+    env |-- ([reify_string_chunks name n chunks onto], s) ---> ([k], s).
+Proof.
+  (* Arguments encode: simpl never. *)
+  induction chunks; intros str; simpl.
+  - eauto using eval.
+  - intros * Honto.
+    eapply IHchunks; intros.
+    econstructor.
+    + apply reify_string_ok; eauto.
+    + apply Honto.
+      eauto using eval, FEnv.lookup_insert_eq.
+Qed.
+
+Lemma reify_chunked_ok
+  (name: string) (sz: nat) (str: list ascii)
+  (onto: FunSyntax.exp -> FunSyntax.exp)
+  (k: Value -> Value):
+  ∀ (env : FEnv.env) (s : state),
+    (forall e,
+        env |-- ([e], s) ---> ([encode str], s) ->
+        env |-- ([onto e], s) ---> ([k (encode str)], s)) ->
+    env |-- ([reify_chunked name sz str onto], s) ---> ([k (encode str)], s).
+Proof.
+  induction
+
+Fixpoint compile_string (str: string) :=
+  match str with
+  | EmptyString => FunSyntax.Const 0
+  | String hd tl => FunSyntax.Op FunSyntax.Cons
+                     [FunSyntax.Const (N_of_ascii hd); compile_string tl]
+  end.
+
+Eval cbv -[N_of_ascii] in compile_string "movq".
+
+Lemma compile_string_ok (str : string):
+  ∀ (env : FEnv.env) (s : state),
+    env |-- ([compile_string str], s) ---> ([encode str], s).
+Proof.
+  induction str; simpl; repeat econstructor; eauto.
+Qed.
+
+
 Derive asm2str_header1_prog
   in ltac2:(relcompile_tpe 'asm2str_header1_prog 'asm2str_header1 ['instrs2str; 'concat_strings; '@list_append; 'string_append])
   as asm2str_header1_prog_proof.
@@ -263,7 +452,7 @@ Proof.
 Qed.
 
 Derive asm2str_prog
-  in ltac2:(relcompile_tpe 'asm2str_prog 'asm2str ['instrs2str; 'concat_strings; '@list_append; 'string_append; 'asm2str_header1; 'asm2str_header2; 'asm2str_header3])
+  in ltac2:(relcompile_tpe 'asm2str_prog 'asm2str ['instrs2str])
   as asm2str_prog_proof.
 Proof.
   time relcompile.
